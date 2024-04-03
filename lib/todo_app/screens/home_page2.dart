@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:todo_app/todo_app/model/todo_database_provider.dart';
 
 import '../model/todo.dart';
 import '../constants/colors.dart';
-import '../widgets/todo_item.dart';
 
 class Home extends StatefulWidget {
   Home({Key? key}) : super(key: key);
@@ -12,14 +12,57 @@ class Home extends StatefulWidget {
 }
 
 class _HomeState extends State<Home> {
-  final todosList = ToDo.toDoList();
-  List<ToDo> _foundToDo = [];
-  final _todoController = TextEditingController();
-
   @override
   void initState() {
-    _foundToDo = todosList;
     super.initState();
+    todoDatabaseProvider = TodoDatabaseProvider();
+    todoDatabaseProvider!.open();
+    
+    //todoList = todoDatabaseProvider?.getList() as List<TodoModel>;
+    _foundToDo = todoList;
+  }
+
+  List<TodoModel> todoList = [];
+  TodoDatabaseProvider? todoDatabaseProvider;
+  TodoModel todoModel = TodoModel();
+  List<TodoModel> _foundToDo = [];
+
+  Future getTodoList() async {
+    todoList = (await todoDatabaseProvider?.getList())!;
+    setState(() {
+      _foundToDo = todoList;
+    });
+  }
+
+  Future<void> saveModel() async {
+    final result = await todoDatabaseProvider?.insert(todoModel);
+  }
+
+  Future<void> updateModel(int id, TodoModel todoModel) async {
+    final result = await todoDatabaseProvider?.update(id, todoModel);
+    print("çalıştı");
+  }
+
+  void updateModell(int id, TodoModel todoModel) {
+    setState(() {
+      todoDatabaseProvider?.update(id, todoModel);
+    });
+  }
+
+  Future<void> deleteItem(int id) async {
+    await todoDatabaseProvider?.delete(id);
+
+    print("silindi");
+  }
+
+  void isDone(int id) {
+    setState(() {
+      if (todoList[id].isDone == 0) {
+        todoList[id].isDone = 1;
+      } else {
+        todoList[id].isDone = 0;
+      }
+    });
   }
 
   @override
@@ -37,30 +80,84 @@ class _HomeState extends State<Home> {
             child: Column(
               children: [
                 searchBox(),
+                SizedBox(
+                  height: 20,
+                ),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.start,
+                  children: [
+                    Text(
+                      "All Todos",
+                      style:
+                          Theme.of(context).textTheme.headlineSmall?.copyWith(),
+                    ),
+                  ],
+                ),
                 Expanded(
-                  child: ListView(
-                    children: [
-                      Container(
-                        margin: EdgeInsets.only(
-                          top: 50,
-                          bottom: 20,
-                        ),
-                        child: Text(
-                          'All ToDos',
-                          style: TextStyle(
-                            fontSize: 30,
-                            fontWeight: FontWeight.w500,
+                  child: ListView.builder(
+                    itemCount: _foundToDo.length,
+                    itemBuilder: (context, index) {
+                      return Card(
+                        elevation: 5,
+                        child: Container(
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: ListTile(
+                            leading: IconButton(
+                                onPressed: () {
+                                  print(index);
+                                  if (todoList[index].isDone == 0) {
+                                    updateModell(
+                                        index,
+                                        TodoModel(
+                                            id: index,
+                                            toDoText:
+                                                "todoList[index].toDoText",
+                                            isDone: 1));
+                                    print("object");
+                                  } else {
+                                    TodoModel updatedTodoModel = TodoModel(
+                                        id: 0,
+                                        toDoText: todoList[0].toDoText,
+                                        isDone: 0);
+                                    updateModell(index, updatedTodoModel);
+                                  }
+                                },
+                                icon: todoList[index].isDone == 0
+                                    ? Icon(Icons.check_box_outline_blank)
+                                    : Icon(Icons.check_box)),
+                            trailing: IconButton(
+                                onPressed: () {
+                                  deleteItem(todoList[index].id ?? index);
+                                  deleteItem(_foundToDo[index].id ?? index);
+                                  getTodoList();
+                                },
+                                iconSize: 15,
+                                icon: Container(
+                                  decoration: BoxDecoration(
+                                      color: Colors.red,
+                                      shape: BoxShape.circle),
+                                  width: 27,
+                                  height: 27,
+                                  child: Icon(
+                                    Icons.delete,
+                                    color: Colors.white,
+                                  ),
+                                )),
+                            title: Text(
+                              _foundToDo[index].toDoText.toString(),
+                            ),
+                            subtitle: Text(_foundToDo[index].isDone.toString()),
                           ),
                         ),
-                      ),
-                      for (ToDo todoo in _foundToDo.reversed)
-                        ToDoItem(
-                          todo: todoo,
-                          onDoChanged: _handleToDoChange,
-                          onDeleteItem: _deleteToDoItem,
-                        ),
-                    ],
+                      );
+                    },
                   ),
+                ),
+                SizedBox(
+                  height: 75,
                 )
               ],
             ),
@@ -92,7 +189,9 @@ class _HomeState extends State<Home> {
                     borderRadius: BorderRadius.circular(10),
                   ),
                   child: TextField(
-                    controller: _todoController,
+                    onChanged: (value) {
+                      todoModel.toDoText = value;
+                    },
                     decoration: InputDecoration(
                         hintText: 'Add a new todo item',
                         border: InputBorder.none),
@@ -105,17 +204,25 @@ class _HomeState extends State<Home> {
                   right: 20,
                 ),
                 child: ElevatedButton(
-                  child: Icon(
-                    Icons.add,
-                    color: ProjectColors().background,
-                  ),
                   onPressed: () {
-                    _addToDoItem(_todoController.text);
+                    if (todoModel.toDoText!.isNotEmpty) {
+                      saveModel();
+                    }
+
+                    // _foundToDo = todoList;
+                    // _runFilter("ahmet");
+
+                    getTodoList();
+                    //_addToDoItem(_todoController.text);
                   },
                   style: ElevatedButton.styleFrom(
                     backgroundColor: ProjectColors().commonTheme,
                     minimumSize: Size(60, 60),
                     elevation: 10,
+                  ),
+                  child: Icon(
+                    Icons.add,
+                    color: ProjectColors().background,
                   ),
                 ),
               ),
@@ -126,34 +233,12 @@ class _HomeState extends State<Home> {
     );
   }
 
-  void _handleToDoChange(ToDo todo) {
-    setState(() {
-      todo.isDone = !todo.isDone;
-    });
-  }
-
-  void _deleteToDoItem(String id) {
-    setState(() {
-      todosList.removeWhere((item) => item.id == id);
-    });
-  }
-
-  void _addToDoItem(String toDo) {
-    setState(() {
-      todosList.add(ToDo(
-        id: DateTime.now().millisecondsSinceEpoch.toString(),
-        toDoText: toDo,
-      ));
-    });
-    _todoController.clear();
-  }
-
   void _runFilter(String enteredKeyword) {
-    List<ToDo> results = [];
+    List<TodoModel> results = [];
     if (enteredKeyword.isEmpty) {
-      results = todosList;
+      results = todoList;
     } else {
-      results = todosList
+      results = todoList
           .where((item) => item.toDoText!
               .toLowerCase()
               .contains(enteredKeyword.toLowerCase()))
@@ -173,7 +258,10 @@ class _HomeState extends State<Home> {
         borderRadius: BorderRadius.circular(20),
       ),
       child: TextField(
-        onChanged: (value) => _runFilter(value),
+        //onEditingComplete: () {},
+        onChanged: (value) {
+          _runFilter(value);
+        },
         decoration: InputDecoration(
           contentPadding: EdgeInsets.all(0),
           prefixIcon: Icon(
